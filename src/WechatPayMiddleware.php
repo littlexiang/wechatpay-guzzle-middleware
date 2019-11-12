@@ -42,8 +42,7 @@ class WechatPayMiddleware
      */
     protected static $API_DOMAINS = [
         'api.mch.weixin.qq.com',
-        'api2.mch.weixin.qq.com',
-        'pay.weixin.qq.com'
+        'api2.mch.weixin.qq.com'
     ];
 
     /**
@@ -53,8 +52,7 @@ class WechatPayMiddleware
      */
     protected static $BASE_URLS = [
         '/v3/',
-        '/sandbox/v3/',
-        '/index.php/xphp/'
+        '/sandbox/v3/'
     ];
 
     /**
@@ -90,14 +88,15 @@ class WechatPayMiddleware
     public function __invoke(callable $handler)
     {
         return function (RequestInterface $request, array $options) use ($handler) {
-            if (!self::isWechatPayApiUrl($request->getUri())) {
-                return $handler($request, $options);
-            }
             $schema = $this->credentials->getSchema();
             $token = $this->credentials->getToken($request);
             $request = $request->withHeader("Authorization", $schema.' '.$token);
             if (self::isUserAgentOverwritable($request)) {
                 $request = $request->withHeader('User-Agent', self::getUserAgent());
+            }
+            
+            if (!self::isWechatPayApiUrl($request->getUri())) {
+                return $handler($request, $options);
             }
 
             return $handler($request, $options)->then(
