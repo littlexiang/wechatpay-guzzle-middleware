@@ -65,9 +65,11 @@ class WechatPayMiddleware
     /**
      * Response Validator
      *
-     *  @var Validator
+     * @var Validator
      */
     protected $validator;
+
+    protected $testMode = true;
 
     /**
      * Constructor
@@ -88,26 +90,27 @@ class WechatPayMiddleware
     public function __invoke(callable $handler)
     {
         return function (RequestInterface $request, array $options) use ($handler) {
+            if (!$this->testMode && !self::isWechatPayApiUrl($request->getUri())) {
+                return $handler($request, $options);
+            }
             $schema = $this->credentials->getSchema();
             $token = $this->credentials->getToken($request);
-            $request = $request->withHeader("Authorization", $schema.' '.$token);
+            $request = $request->withHeader("Authorization", $schema . ' ' . $token);
             if (self::isUserAgentOverwritable($request)) {
                 $request = $request->withHeader('User-Agent', self::getUserAgent());
-            }
-            
-            if (!self::isWechatPayApiUrl($request->getUri())) {
-                return $handler($request, $options);
             }
 
             return $handler($request, $options)->then(
                 function (ResponseInterface $response) use ($request) {
                     $code = $response->getStatusCode();
-                    if ($code >= 200 && $code < 300 && !$this->validator->validate($response)) {
-                        if (\class_exists('\\GuzzleHttp\\Exception\\ServerException')) {
-                            throw new \GuzzleHttp\Exception\ServerException(
-                                "应答的微信支付签名验证失败", $request, $response);
-                        } else {
-                            throw new \RuntimeException("应答的微信支付签名验证失败", $code);
+                    if  (!$this->testMode) {
+                        if ($code >= 200 && $code < 300 && !$this->validator->validate($response)) {
+                            if (\class_exists('\\GuzzleHttp\\Exception\\ServerException')) {
+                                throw new \GuzzleHttp\Exception\ServerException(
+                                    "应答的微信支付签名验证失败", $request, $response);
+                            } else {
+                                throw new \RuntimeException("应答的微信支付签名验证失败", $code);
+                            }
                         }
                     }
                     return $response;
@@ -150,12 +153,12 @@ class WechatPayMiddleware
     {
         static $userAgent = '';
         if (!$userAgent) {
-            $agent = 'WechatPay-Guzzle/'.self::VERSION;
+            $agent = 'WechatPay-Guzzle/' . self::VERSION;
             if (\class_exists('\\GuzzleHttp\\Client')) {
-                $agent .= ' GuzzleHttp/'.\GuzzleHttp\Client::VERSION;
+                $agent .= ' GuzzleHttp/' . \GuzzleHttp\Client::VERSION;
             }
             if (extension_loaded('curl') && function_exists('curl_version')) {
-                $agent .= ' curl/'.\curl_version()['version'];
+                $agent .= ' curl/' . \curl_version()['version'];
             }
             $agent .= \sprintf(" (%s/%s) PHP/%s", PHP_OS, \php_uname('r'), PHP_VERSION);
             $userAgent = $agent;
